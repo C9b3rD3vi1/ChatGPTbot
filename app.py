@@ -3,6 +3,28 @@ import requests
 from flask import Flask, request, render_template
 import openai
 from messagebird import Client, Message
+from vonage import Client, Sms
+
+
+
+app = Flask(__name__)
+
+
+# Configure Vonage API credentials
+vonage_api_key = '608b3b04'
+vonage_api_secret = 'N9FCQ1M9pZhtDfmM'
+vonage_phone_number = '0740458874'
+
+client = Client(key=vonage_api_key, secret=vonage_api_secret)
+
+
+
+# Configure OpenAI ChatGPT API credentials
+
+openai_api_key = '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'
+
+
+
 
 app = Flask(__name__)
 
@@ -14,6 +36,9 @@ messagebird_client = Client(messagebird_api_key)
 
 # Configure OpenAI ChatGPT API credentials
 openai_api_key = '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'
+
+
+
 
 @app.route('/')
 def home():
@@ -32,6 +57,10 @@ def webhook():
         # Call the ChatGPT API to process the message
         response = chat_with_gpt(message)
 
+
+    # Send the response back to WhatsApp
+    send_message(response)
+
         # Send the response back using MessageBird
         send_message(sender, response)
 
@@ -43,7 +72,28 @@ def webhook():
         print(error_message)
         return error_message, 500
 
+      
+      
 def chat_with_gpt(message):
+    # Call the ChatGPT API to generate a response
+    gpt_response = requests.post(
+        'https://api.openai.com/v1/engines/davinci-codex/completions',
+
+        headers={
+           'Authorization': f'Bearer {openai_api_key}',
+            'Content-Type': 'application/json'
+        },
+        json={
+            'prompt': message,
+            'max_tokens': 50
+        }
+    )
+
+    # Extract the generated response from the API response
+    response = gpt_response.json()['choices'][0]['text']
+
+    return response
+
     try:
         # Call the ChatGPT API to generate a response
         gpt_response = openai.Completion.create(
@@ -57,6 +107,14 @@ def chat_with_gpt(message):
         response = gpt_response.choices[0].text
 
         return response
+
+     # Use Vonage API to send the message back to the sender
+    sms = Sms(client)
+    sms.send_message({
+        'from': vonage_phone_number,  # Your Vonage phone number
+        'to': sender,  # Phone number of the sender
+        'text': message  # Response message
+    })
 
     except openai.error.OpenAIError as e:
         # Handle API request errors
